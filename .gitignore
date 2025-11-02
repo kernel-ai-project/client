@@ -1,0 +1,10 @@
+# 프로젝트 공통
+node_modules/
+dist/
+build/
+.vite/
+.DS_Store
+.env
+.env.*
+.idea/
+.vscode/
