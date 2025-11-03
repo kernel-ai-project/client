@@ -49,12 +49,6 @@ function saveConversations(convs) {
 
 // --- Main component ------------------------------------------------------
 export default function ChatUI() {
-  const [theme, setTheme] = useState(() =>
-    window.matchMedia &&
-    window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light"
-  );
   const [conversations, setConversations] = useState(loadConversations);
   const [activeId, setActiveId] = useState(conversations[0]?.id);
   const [input, setInput] = useState("");
@@ -66,27 +60,22 @@ export default function ChatUI() {
   );
 
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", theme === "dark");
-  }, [theme]);
-useEffect(() => {
-  saveConversations(conversations);
-}, [conversations]);
+    saveConversations(conversations);
+  }, [conversations]);
   useEffect(() => {
     if (listRef.current)
       listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [activeConv?.messages.length, isThinking]);
 
-  // 콜백들은 useCallback으로 안정화(불필요 리렌더 줄이기)
-  const onToggleTheme = useCallback(
-    () => setTheme((t) => (t === "dark" ? "light" : "dark")),
-    []
-  );
   const onSelectChat = useCallback((id) => setActiveId(id), []);
   const onNewChat = useCallback(() => {
     const next = createConversation("새 대화");
     setConversations((prev) => [next, ...prev]);
     setActiveId(next.id);
   }, []);
+  const onEditChatName = useCallback(() => {
+    // 수정 로직 작성하기
+  });
   const onDeleteChat = useCallback((id) => {
     setConversations((prev) => {
       const copy = prev.filter((c) => c.id !== id);
@@ -95,35 +84,35 @@ useEffect(() => {
       return list;
     });
   }, []);
-const pushMessage = useCallback((conversationId, role, content) => {
-  const message = createMessage(role, content);
-  setConversations((prev) =>
-    prev.map((conversation) =>
-      conversation.id === conversationId
-        ? {
-            ...conversation,
-            messages: [...conversation.messages, message],
-          }
-        : conversation
-    )
-  );
-  return message;
-}, []);
-const appendToMessage = useCallback((conversationId, messageId, chunk) => {
-  setConversations((prev) =>
-    prev.map((conversation) => {
-      if (conversation.id !== conversationId) return conversation;
-      return {
-        ...conversation,
-        messages: conversation.messages.map((message) =>
-          message.id === messageId
-            ? { ...message, content: message.content + chunk }
-            : message
-        ),
-      };
-    })
-  );
-}, []);
+  const pushMessage = useCallback((conversationId, role, content) => {
+    const message = createMessage(role, content);
+    setConversations((prev) =>
+      prev.map((conversation) =>
+        conversation.id === conversationId
+          ? {
+              ...conversation,
+              messages: [...conversation.messages, message],
+            }
+          : conversation
+      )
+    );
+    return message;
+  }, []);
+  const appendToMessage = useCallback((conversationId, messageId, chunk) => {
+    setConversations((prev) =>
+      prev.map((conversation) => {
+        if (conversation.id !== conversationId) return conversation;
+        return {
+          ...conversation,
+          messages: conversation.messages.map((message) =>
+            message.id === messageId
+              ? { ...message, content: message.content + chunk }
+              : message
+          ),
+        };
+      })
+    );
+  }, []);
 
   async function onSend() {
     const trimmed = input.trim();
@@ -160,23 +149,17 @@ const appendToMessage = useCallback((conversationId, messageId, chunk) => {
   }
 
   return (
-    <div className="h-screen w-full bg-zinc-100 text-zinc-900 dark:bg-[#0b0b0e] dark:text-zinc-100 flex">
+    <div className="h-screen w-full  bg-[#0b0b0e] text-zinc-100 flex">
       <Sidebar
-        theme={theme}
-        onToggleTheme={onToggleTheme}
         conversations={conversations}
         activeId={activeId}
         onSelectChat={onSelectChat}
         onNewChat={onNewChat}
         onDeleteChat={onDeleteChat}
+        onEditChatName={onEditChatName}
       />
       <section className="flex-1 flex flex-col">
-        <ChatHeader
-          title={activeConv?.title}
-          theme={theme}
-          onToggleTheme={onToggleTheme}
-          onNewChat={onNewChat}
-        />
+        <ChatHeader title={activeConv?.title} onNewChat={onNewChat} />
         <MessageList
           messages={activeConv?.messages ?? []}
           isThinking={isThinking}
