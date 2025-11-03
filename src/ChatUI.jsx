@@ -114,14 +114,36 @@ export default function ChatUI() {
     );
   }, []);
 
+  async function* askStream(question) {
+    const response = await fetch("http://localhost:8080/api/ask/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question }),
+    });
+    if (!response.ok || !response.body) {
+      throw new Error("스트림을 열지 못했습니다.");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      yield decoder.decode(value, { stream: true });
+    }
+  }
+
   async function onSend() {
     const trimmed = input.trim();
     if (!trimmed || isThinking) return;
+
     const currentConversationId = activeConv?.id;
     if (!currentConversationId) return;
 
     pushMessage(currentConversationId, ROLES.user, trimmed);
     setInput("");
+
     if (activeConv.title === "새 대화" || activeConv.title === "New chat") {
       setConversations((prev) =>
         prev.map((c) =>
@@ -129,17 +151,28 @@ export default function ChatUI() {
         )
       );
     }
+
     setIsThinking(true);
-    const reply = "(데모) 질문을 잘 받았어요!\n\n— 로컬 UI 데모입니다.";
     const assistantMessage = pushMessage(
       currentConversationId,
       ROLES.assistant,
       ""
     );
-    await fakeStream(reply, (chunk) =>
-      appendToMessage(currentConversationId, assistantMessage.id, chunk)
-    );
-    setIsThinking(false);
+
+    try {
+      for await (const chunk of askStream(trimmed)) {
+        appendToMessage(currentConversationId, assistantMessage.id, chunk);
+      }
+    } catch (error) {
+      appendToMessage(
+        currentConversationId,
+        assistantMessage.id,
+        "\n(에러) 답변을 불러오지 못했습니다."
+      );
+      console.error(error);
+    } finally {
+      setIsThinking(false);
+    }
   }
   function onKeyDown(e) {
     if (e.key === "Enter" && !e.shiftKey) {
