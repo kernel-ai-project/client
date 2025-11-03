@@ -1,5 +1,5 @@
 import "./App.css";
-import ChatUI from "./ChatUI.jsx";
+import ChatUI from "./ChatUI";
 
 function App() {
   return <ChatUI />;
