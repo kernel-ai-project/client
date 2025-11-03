@@ -1,14 +1,13 @@
-import { Plus, Search, MessageSquare, Trash2, Sun, Moon } from "lucide-react";
+import { Plus, MessageSquare, Trash2, Pencil } from "lucide-react";
 import IconButton from "./IconButton";
 
 export default function Sidebar({
-  theme,
-  onToggleTheme,
   conversations,
   activeId,
   onSelectChat,
   onNewChat,
   onDeleteChat,
+  onEditChatName,
 }) {
   return (
     <aside className="hidden flex-col border-r border-zinc-800/60 bg-[#0e0e13] md:flex md:w-72 lg:w-80">
@@ -20,24 +19,6 @@ export default function Sidebar({
         >
           <Plus className="h-4 w-4" /> 새 채팅
         </button>
-        <IconButton title="테마 전환" onClick={onToggleTheme}>
-          {theme === "dark" ? (
-            <Sun className="h-5 w-5" />
-          ) : (
-            <Moon className="h-5 w-5" />
-          )}
-        </IconButton>
-      </div>
-
-      <div className="p-3">
-        <label className="relative block">
-          <span className="sr-only">채팅 검색</span>
-          <input
-            placeholder="채팅 검색"
-            className="h-10 w-full rounded-xl bg-zinc-900/70 pl-10 pr-3 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-700"
-          />
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-        </label>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -64,6 +45,16 @@ export default function Sidebar({
                 </div>
               </div>
               <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
+                <IconButton
+                  title="채팅방 이름 수정"
+                  onClick={(event) => {
+                    //이름 수정 함수 작성하기
+                    event.stopPropagation();
+                    onEditChatName(conversation.id);
+                  }}
+                >
+                  <Pencil className="h-4 w-4 text-zinc-400" />
+                </IconButton>
                 <IconButton
                   title="삭제"
                   onClick={(event) => {

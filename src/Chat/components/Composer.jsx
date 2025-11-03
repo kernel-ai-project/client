@@ -1,4 +1,4 @@
-import { Mic, Send, Paperclip, Image as ImageIcon } from "lucide-react";
+import { Mic, Send, Image as ImageIcon } from "lucide-react";
 import IconButton from "./IconButton";
 
 export default function Composer({
@@ -11,28 +11,17 @@ export default function Composer({
   return (
     <div className="px-3 pb-4 pt-2 md:px-8 md:pb-6">
       <div className="mx-auto w-full md:max-w-3xl">
-        <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/70 p-2">
+        <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/70 p-2 h-15">
           <div className="flex items-end gap-2">
-            <div className="flex items-center gap-1 px-1 pb-1">
-              <IconButton title="파일 첨부">
-                <Paperclip className="h-5 w-5 text-zinc-400" />
-              </IconButton>
-              <IconButton title="이미지 첨부">
-                <ImageIcon className="h-5 w-5 text-zinc-400" />
-              </IconButton>
-            </div>
             <textarea
               value={input}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={onKeyDown}
               rows={1}
               placeholder="무엇이든 물어보세요"
-              className="flex-1 max-h-40 resize-none bg-transparent px-2 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none"
+              className="flex-1 max-h-40 resize-none bg-transparent px-2 py-3 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none"
             />
             <div className="flex items-center gap-1 px-1 pb-1">
-              <IconButton title="음성 입력">
-                <Mic className="h-5 w-5 text-zinc-400" />
-              </IconButton>
               <button
                 type="button"
                 onClick={onSend}
