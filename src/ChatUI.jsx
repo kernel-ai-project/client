@@ -53,7 +53,9 @@ export default function ChatUI() {
   const [activeId, setActiveId] = useState(conversations[0]?.id);
   const [input, setInput] = useState("");
   const [isThinking, setIsThinking] = useState(false);
+
   const listRef = useRef(null);
+
   const activeConv = useMemo(
     () => conversations.find((c) => c.id === activeId) ?? conversations[0],
     [conversations, activeId]
@@ -62,20 +64,24 @@ export default function ChatUI() {
   useEffect(() => {
     saveConversations(conversations);
   }, [conversations]);
+
   useEffect(() => {
     if (listRef.current)
       listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [activeConv?.messages.length, isThinking]);
 
   const onSelectChat = useCallback((id) => setActiveId(id), []);
+
   const onNewChat = useCallback(() => {
     const next = createConversation("새 대화");
     setConversations((prev) => [next, ...prev]);
     setActiveId(next.id);
   }, []);
+
   const onEditChatName = useCallback(() => {
     // 수정 로직 작성하기
   });
+
   const onDeleteChat = useCallback((id) => {
     setConversations((prev) => {
       const copy = prev.filter((c) => c.id !== id);
@@ -84,6 +90,7 @@ export default function ChatUI() {
       return list;
     });
   }, []);
+
   const pushMessage = useCallback((conversationId, role, content) => {
     const message = createMessage(role, content);
     setConversations((prev) =>
@@ -98,6 +105,7 @@ export default function ChatUI() {
     );
     return message;
   }, []);
+
   const appendToMessage = useCallback((conversationId, messageId, chunk) => {
     setConversations((prev) =>
       prev.map((conversation) => {
@@ -208,16 +216,4 @@ export default function ChatUI() {
       </section>
     </div>
   );
-}
-
-// --- Utilities -----------------------------------------------------------
-async function fakeStream(text, onChunk) {
-  const tokens = text.split(/(\s+)/); // keep spaces for nicer feel
-  for (const t of tokens) {
-    await sleep(18 + Math.random() * 24);
-    onChunk(t);
-  }
-}
-function sleep(ms) {
-  return new Promise((res) => setTimeout(res, ms));
 }
