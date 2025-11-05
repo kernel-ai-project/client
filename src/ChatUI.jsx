@@ -52,7 +52,9 @@ export default function ChatUI() {
   // 초기 채팅방 목록 로드
   const loadChatRooms = useCallback(async () => {
     try {
-      const res = await fetch("http://localhost:8080/api/chatRooms/1");
+      const res = await fetch("http://localhost:8080/api/chatRooms", {
+        credentials: "include",
+      });
       if (!res.ok) throw new Error("채팅방 목록 로딩 실패");
       const rooms = await res.json();
       const normalized = normalizeChatRooms(rooms);
@@ -107,7 +109,8 @@ export default function ChatUI() {
   // 채팅방 메시지 로드
   const loadConversationMessages = useCallback(async (chatRoomId) => {
     const res = await fetch(
-      `http://localhost:8080/api/chatRooms/${chatRoomId}/messages`
+      `http://localhost:8080/api/chatRooms/${chatRoomId}/messages`,
+      { credentials: "include" }
     );
     if (!res.ok) throw new Error("채팅방 불러오기 실패");
     const data = await res.json();
@@ -263,6 +266,7 @@ export default function ChatUI() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ question }),
+      credentials: "include",
     });
     if (!response.ok || !response.body) {
       throw new Error("스트림을 열지 못했습니다.");
@@ -307,6 +311,7 @@ export default function ChatUI() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ question: trimmed }),
+            credentials: "include",
           });
           if (!res.ok) throw new Error("채팅방 생성 실패");
 
