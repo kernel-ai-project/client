@@ -3,87 +3,133 @@ import Sidebar from "./Chat/components/Sidebar";
 import ChatHeader from "./Chat/components/ChatHeader";
 import MessageList from "./Chat/components/MessageList";
 import Composer from "./Chat/components/Composer";
-
+import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import "./ChatUI.css";
 
 // --- Types ---------------------------------------------------------------
 const ROLES = { user: "user", assistant: "assistant", system: "system" };
 
-// Message type
+// 메시지 객체 생성
 function createMessage(role, content) {
   return { id: crypto.randomUUID(), role, content, createdAt: Date.now() };
 }
 
-// Conversation type
-function createConversation(title = "New chat") {
-  return {
-    id: crypto.randomUUID(),
-    title,
+// 채팅방 리스트 응답을 내부 포맷으로 정규화
+function normalizeChatRooms(apiRooms = []) {
+  return apiRooms.map((room) => ({
+    id: String(room.chatRoomId),
+    title: room.title ?? "새 대화",
     createdAt: Date.now(),
-    messages: [
-      createMessage(
-        ROLES.assistant,
-        "무엇을 도와드릴까요? 질문을 입력해 보세요."
-      ),
-    ],
-  };
+    isFavorited: Boolean(room.isFavorited),
+    messages: [],
+  }));
 }
 
-// --- LocalStorage helpers ----------------------------------------------
-const LS_KEY = "chatui.conversations.v1";
-function loadConversations() {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return [createConversation("첫 번째 대화")];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0
-      ? parsed
-      : [createConversation("첫 번째 대화")];
-  } catch {
-    return [createConversation("첫 번째 대화")];
-  }
-}
-function saveConversations(convs) {
-  localStorage.setItem(LS_KEY, JSON.stringify(convs));
-}
-
-// --- Main component ------------------------------------------------------
 export default function ChatUI() {
-  const [conversations, setConversations] = useState(loadConversations);
-  const [activeId, setActiveId] = useState(conversations[0]?.id);
+  const [conversations, setConversations] = useState([]);
+  const [activeId, setActiveId] = useState(null);
   const [input, setInput] = useState("");
   const [isThinking, setIsThinking] = useState(false);
+
   const listRef = useRef(null);
+  const sendLockRef = useRef(false);
+  const activeIdRef = useRef(null);
+
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const routeActiveId = useMemo(() => {
+    const match = location.pathname.match(/^\/chat\/([^/]+)/);
+    return match ? match[1] : null;
+  }, [location.pathname]);
+
+  // 현재 선택된 채팅방 계산
   const activeConv = useMemo(
-    () => conversations.find((c) => c.id === activeId) ?? conversations[0],
+    () => conversations.find((conv) => conv.id === activeId),
     [conversations, activeId]
   );
 
-  useEffect(() => {
-    saveConversations(conversations);
-  }, [conversations]);
-  useEffect(() => {
-    if (listRef.current)
-      listRef.current.scrollTop = listRef.current.scrollHeight;
-  }, [activeConv?.messages.length, isThinking]);
+  // 초기 채팅방 목록 로드
+  const loadChatRooms = useCallback(async () => {
+    try {
+      const res = await fetch("http://localhost:8080/api/chatRooms/1");
+      if (!res.ok) throw new Error("채팅방 목록 로딩 실패");
+      const rooms = await res.json();
+      const normalized = normalizeChatRooms(rooms);
+      const normalizedMap = new Map(normalized.map((conv) => [conv.id, conv]));
 
-  const onSelectChat = useCallback((id) => setActiveId(id), []);
-  const onNewChat = useCallback(() => {
-    const next = createConversation("새 대화");
-    setConversations((prev) => [next, ...prev]);
-    setActiveId(next.id);
+      let resolvedActiveId = null;
+      setConversations((prev) => {
+        const prevMap = new Map(prev.map((conv) => [conv.id, conv]));
+        const merged = normalized.map((conv) => {
+          const existing = prevMap.get(conv.id);
+          if (!existing) return conv;
+          return {
+            ...conv,
+            messages: existing.messages,
+            isTemp: existing.isTemp ?? false,
+          };
+        });
+
+        const extras = prev.filter((conv) => !normalizedMap.has(conv.id));
+        const nextList = [...merged, ...extras];
+
+        resolvedActiveId =
+          nextList.find((conv) => conv.id === routeActiveId)?.id ??
+          (nextList.some((conv) => conv.id === activeIdRef.current)
+            ? activeIdRef.current
+            : null) ??
+          nextList[0]?.id ??
+          null;
+
+        return nextList;
+      });
+
+      setActiveId((current) =>
+        resolvedActiveId !== null ? resolvedActiveId : current
+      );
+    } catch (error) {
+      console.log(error);
+      setConversations((prev) => {
+        if (prev.length) return prev;
+        return normalizeChatRooms([]);
+      });
+      setActiveId((prevId) => prevId ?? null);
+    }
+  }, [routeActiveId]);
+
+  useEffect(() => {
+    if (routeActiveId && routeActiveId !== activeId) {
+      setActiveId(routeActiveId);
+    }
+  }, [routeActiveId, activeId]);
+
+  // 채팅방 메시지 로드
+  const loadConversationMessages = useCallback(async (chatRoomId) => {
+    const res = await fetch(
+      `http://localhost:8080/api/chatRooms/${chatRoomId}/messages`
+    );
+    if (!res.ok) throw new Error("채팅방 불러오기 실패");
+    const data = await res.json();
+    return {
+      id: String(data.chatRoomId),
+      title: data.title ?? "새 대화",
+      createdAt: Date.now(),
+      messages: mapMessages(data.messages),
+    };
   }, []);
-  const onEditChatName = useCallback(() => {
-    // 수정 로직 작성하기
-  });
-  const onDeleteChat = useCallback((id) => {
+
+  // 채팅방 생성 또는 교체
+  const upsertConversation = useCallback((next) => {
     setConversations((prev) => {
-      const copy = prev.filter((c) => c.id !== id);
-      const list = copy.length ? copy : [createConversation("새 대화")];
-      setActiveId(list[0].id);
-      return list;
+      const exists = prev.some((conv) => conv.id === next.id);
+      return exists
+        ? prev.map((conv) => (conv.id === next.id ? next : conv))
+        : [...prev, next];
     });
   }, []);
+
+  // 메시지 추가
   const pushMessage = useCallback((conversationId, role, content) => {
     const message = createMessage(role, content);
     setConversations((prev) =>
@@ -98,6 +144,8 @@ export default function ChatUI() {
     );
     return message;
   }, []);
+
+  // 스트리밍 청크 병합
   const appendToMessage = useCallback((conversationId, messageId, chunk) => {
     setConversations((prev) =>
       prev.map((conversation) => {
@@ -114,6 +162,102 @@ export default function ChatUI() {
     );
   }, []);
 
+  // 채팅방 선택
+  const onSelectChat = useCallback(
+    async (chatRoomId) => {
+      try {
+        const mapped = await loadConversationMessages(chatRoomId);
+        upsertConversation(mapped);
+        setActiveId(mapped.id);
+        navigate(`/chat/${chatRoomId}`);
+      } catch (error) {
+        console.error(error);
+      }
+    },
+    [loadConversationMessages, navigate, upsertConversation]
+  );
+
+  const onEditChatName = useCallback(() => {
+    // 수정 로직 작성하기
+  });
+
+  // 채팅방 삭제
+  const onDeleteChat = useCallback((id) => {
+    setConversations((prev) => {
+      const remaining = prev.filter((conv) => conv.id !== id);
+      const nextList = remaining.length
+        ? remaining
+        : [createConversation("새 대화")];
+      setActiveId(nextList[0].id);
+      return nextList;
+    });
+  }, []);
+
+  // 초기 렌더 시 채팅방 목록 불러오기
+  useEffect(() => {
+    loadChatRooms();
+  }, [loadChatRooms]);
+
+  // 메시지 추가 시 스크롤 유지
+  useEffect(() => {
+    if (!listRef.current) return;
+    listRef.current.scrollTop = listRef.current.scrollHeight;
+  }, [activeConv?.messages.length, isThinking]);
+
+  useEffect(() => {
+    activeIdRef.current = activeId;
+  }, [activeId]);
+
+  const lastLoadedConversationRef = useRef(null);
+
+  useEffect(() => {
+    if (!activeId || !activeConv || activeConv.isTemp) return;
+
+    if (
+      activeConv.messages.length > 0 &&
+      lastLoadedConversationRef.current === activeId
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    lastLoadedConversationRef.current = activeId;
+
+    (async () => {
+      try {
+        const fresh = await loadConversationMessages(activeId);
+        if (cancelled) return;
+        setConversations((prev) => {
+          const exists = prev.some((conv) => conv.id === fresh.id);
+          if (!exists) return [...prev, { ...fresh, isTemp: false }];
+          return prev.map((conv) => {
+            if (conv.id !== fresh.id) return conv;
+            const mergedMessages =
+              conv.messages.length >= fresh.messages.length
+                ? conv.messages
+                : fresh.messages;
+            return {
+              ...conv,
+              ...fresh,
+              messages: mergedMessages,
+              isTemp: false,
+            };
+          });
+        });
+      } catch (error) {
+        console.error(error);
+        if (lastLoadedConversationRef.current === activeId) {
+          lastLoadedConversationRef.current = null;
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeId, activeConv, loadConversationMessages]);
+
+  // 답변 스트림 요청
   async function* askStream(question) {
     const response = await fetch("http://localhost:8080/api/ask/stream", {
       method: "POST",
@@ -123,10 +267,8 @@ export default function ChatUI() {
     if (!response.ok || !response.body) {
       throw new Error("스트림을 열지 못했습니다.");
     }
-
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
@@ -134,51 +276,125 @@ export default function ChatUI() {
     }
   }
 
+  // 메시지 전송
   async function onSend() {
     const trimmed = input.trim();
-    if (!trimmed || isThinking) return;
+    if (!trimmed || isThinking || sendLockRef.current) return;
 
-    const currentConversationId = activeConv?.id;
-    if (!currentConversationId) return;
-
-    pushMessage(currentConversationId, ROLES.user, trimmed);
-    setInput("");
-
-    if (activeConv.title === "새 대화" || activeConv.title === "New chat") {
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === activeId ? { ...c, title: trimmed.slice(0, 28) } : c
-        )
-      );
-    }
-
-    setIsThinking(true);
-    const assistantMessage = pushMessage(
-      currentConversationId,
-      ROLES.assistant,
-      ""
-    );
-
+    sendLockRef.current = true;
     try {
-      for await (const chunk of askStream(trimmed)) {
-        appendToMessage(currentConversationId, assistantMessage.id, chunk);
+      let conversationId = activeConv?.id;
+      let shouldRename = false;
+
+      let ensureConversationPromise = Promise.resolve(conversationId ?? null);
+
+      if (location.pathname === "/" || !conversationId) {
+        const tempId = crypto.randomUUID();
+        const tempConversation = createConversation(
+          trimmed.slice(0, 20) || "새 대화",
+          {
+            id: tempId,
+            isTemp: true,
+          }
+        );
+        upsertConversation(tempConversation);
+        setActiveId(tempId);
+        navigate(`/chat/${tempId}`);
+        conversationId = tempId;
+
+        ensureConversationPromise = (async () => {
+          const res = await fetch("http://localhost:8080/api/chatRooms", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ question: trimmed }),
+          });
+          if (!res.ok) throw new Error("채팅방 생성 실패");
+
+          const data = await res.json();
+          const realId = String(data.chatRoomId);
+
+          setConversations((prev) =>
+            prev.map((conv) =>
+              conv.id === tempId
+                ? {
+                    ...conv,
+                    id: realId,
+                    title: data.query ?? conv.title,
+                    isTemp: false,
+                  }
+                : conv
+            )
+          );
+          setActiveId(realId);
+          navigate(`/chat/${realId}`);
+          return realId;
+        })();
+      } else if (
+        activeConv?.title === "새 대화" ||
+        activeConv?.title === "New chat"
+      ) {
+        shouldRename = true;
       }
-    } catch (error) {
-      appendToMessage(
-        currentConversationId,
-        assistantMessage.id,
-        "\n(에러) 답변을 불러오지 못했습니다."
-      );
-      console.error(error);
+
+      setInput("");
+      pushMessage(conversationId, ROLES.user, trimmed);
+
+      const thinkingMessage = pushMessage(conversationId, ROLES.assistant, "");
+
+      if (shouldRename) {
+        const title = trimmed.slice(0, 20) || "새 대화";
+        setConversations((prev) =>
+          prev.map((conv) =>
+            conv.id === conversationId ? { ...conv, title } : conv
+          )
+        );
+      }
+
+      setIsThinking(true);
+      try {
+        const resolvedId = (await ensureConversationPromise) ?? conversationId;
+        conversationId = resolvedId;
+
+        for await (const chunk of askStream(trimmed)) {
+          appendToMessage(conversationId, thinkingMessage.id, chunk);
+        }
+      } catch (error) {
+        appendToMessage(
+          conversationId,
+          thinkingMessage.id,
+          "\n(에러) 답변을 불러오지 못했습니다."
+        );
+        console.error(error);
+      } finally {
+        setIsThinking(false);
+      }
     } finally {
-      setIsThinking(false);
+      sendLockRef.current = false;
     }
   }
+
+  function createConversation(
+    title = "새 대화",
+    { id = crypto.randomUUID(), messages = [], isTemp = false } = {}
+  ) {
+    return { id, title, createdAt: Date.now(), messages, isTemp };
+  }
+
   function onKeyDown(e) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       onSend();
     }
+  }
+
+  function mapMessages(apiMessages = []) {
+    return apiMessages.map((m) => ({
+      id: String(m.messageId),
+      role: m.isUser ? ROLES.user : ROLES.assistant,
+      content: m.message ?? "",
+      createdAt: new Date(m.created_time).getTime(),
+      userId: m.userId ?? null,
+    }));
   }
 
   return (
@@ -187,37 +403,66 @@ export default function ChatUI() {
         conversations={conversations}
         activeId={activeId}
         onSelectChat={onSelectChat}
-        onNewChat={onNewChat}
         onDeleteChat={onDeleteChat}
         onEditChatName={onEditChatName}
       />
-      <section className="flex-1 flex flex-col">
-        <ChatHeader title={activeConv?.title} onNewChat={onNewChat} />
-        <MessageList
-          messages={activeConv?.messages ?? []}
-          isThinking={isThinking}
-          listRef={listRef}
+
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <section className="flex-1 flex flex-col">
+              <div
+                ref={listRef}
+                className="flex-1 flex items-center justify-center overflow-y-auto bg-[#0b0b0e] p-4 text-center md:px-8 md:py-6 "
+              >
+                ㅎㅇ
+              </div>
+              <MainChat
+                input={input}
+                setInput={setInput}
+                onSend={onSend}
+                onKeyDown={onKeyDown}
+                isThinking={isThinking}
+              />
+            </section>
+          }
         />
-        <Composer
-          input={input}
-          setInput={setInput}
-          onSend={onSend}
-          onKeyDown={onKeyDown}
-          isThinking={isThinking}
+        <Route
+          path="/chat/:chatRoomId"
+          element={
+            <section className="flex-1 flex flex-col">
+              <ChatHeader title={activeConv?.title} />
+              <MessageList
+                messages={activeConv?.messages ?? []}
+                isThinking={isThinking}
+                listRef={listRef}
+              />
+              <Composer
+                input={input}
+                setInput={setInput}
+                onSend={onSend}
+                onKeyDown={onKeyDown}
+                isThinking={isThinking}
+              />
+            </section>
+          }
         />
-      </section>
+      </Routes>
     </div>
   );
 }
 
-// --- Utilities -----------------------------------------------------------
-async function fakeStream(text, onChunk) {
-  const tokens = text.split(/(\s+)/); // keep spaces for nicer feel
-  for (const t of tokens) {
-    await sleep(18 + Math.random() * 24);
-    onChunk(t);
-  }
-}
-function sleep(ms) {
-  return new Promise((res) => setTimeout(res, ms));
+function MainChat({ input, setInput, onSend, onKeyDown, isThinking }) {
+  return (
+    <div>
+      <Composer
+        input={input}
+        setInput={setInput}
+        onSend={onSend}
+        onKeyDown={onKeyDown}
+        isThinking={isThinking}
+      />
+    </div>
+  );
 }

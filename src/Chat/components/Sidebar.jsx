@@ -1,20 +1,23 @@
 import { Plus, MessageSquare, Trash2, Pencil } from "lucide-react";
 import IconButton from "./IconButton";
+import { useNavigate } from "react-router-dom";
 
 export default function Sidebar({
   conversations,
   activeId,
   onSelectChat,
-  onNewChat,
   onDeleteChat,
   onEditChatName,
 }) {
+  let navigate = useNavigate();
   return (
     <aside className="hidden flex-col border-r border-zinc-800/60 bg-[#0e0e13] md:flex md:w-72 lg:w-80">
       <div className="flex items-center gap-2 border-b border-zinc-800/60 p-3">
         <button
           type="button"
-          onClick={onNewChat}
+          onClick={() => {
+            navigate("/");
+          }}
           className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-900 px-3 text-zinc-200 transition hover:bg-zinc-800"
         >
           <Plus className="h-4 w-4" /> 새 채팅
