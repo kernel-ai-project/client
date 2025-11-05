@@ -403,7 +403,7 @@ export default function ChatUI() {
   }
 
   return (
-    <div className="h-screen w-full  bg-[#0b0b0e] text-zinc-100 flex">
+    <div className="box-border flex h-screen w-full gap-3 bg-[#FDFDFD] px-3 py-4 text-black md:gap-6 md:px-6 md:py-8">
       <Sidebar
         conversations={conversations}
         activeId={activeId}
@@ -412,62 +412,64 @@ export default function ChatUI() {
         onEditChatName={onEditChatName}
       />
 
-      <Routes>
-        <Route
-          path="/"
-          element={
-            <section className="flex-1 flex flex-col">
-              <div
-                ref={listRef}
-                className="flex-1 flex items-center justify-center overflow-y-auto bg-[#0b0b0e] p-4 text-center md:px-8 md:py-6 "
-              >
-                ㅎㅇ
-              </div>
-              <MainChat
-                input={input}
-                setInput={setInput}
-                onSend={onSend}
-                onKeyDown={onKeyDown}
-                isThinking={isThinking}
-              />
-            </section>
-          }
-        />
-        <Route
-          path="/chat/:chatRoomId"
-          element={
-            <section className="flex-1 flex flex-col">
-              <ChatHeader title={activeConv?.title} />
-              <MessageList
-                messages={activeConv?.messages ?? []}
-                isThinking={isThinking}
-                listRef={listRef}
-              />
-              <Composer
-                input={input}
-                setInput={setInput}
-                onSend={onSend}
-                onKeyDown={onKeyDown}
-                isThinking={isThinking}
-              />
-            </section>
-          }
-        />
-      </Routes>
+      <div className="flex flex-1 flex-col">
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <section className="flex flex-1 flex-col rounded-3xl border border-[#659EFF]/20 bg-white/90 shadow-[0_28px_80px_rgba(101,158,255,0.15)] backdrop-blur-sm transition-shadow duration-300 md:overflow-hidden md:hover:shadow-[0_32px_110px_rgba(101,158,255,0.22)]">
+                <div
+                  ref={listRef}
+                  className="flex flex-1 items-center justify-center p-6 text-center md:p-12"
+                >
+                  <div className="rounded-3xl border border-[#659EFF]/25 bg-[#FDFDFD] px-8 py-12 text-lg font-medium shadow-inner shadow-[#659EFF]/20">
+                    ㅎㅇ
+                  </div>
+                </div>
+                <MainChat
+                  input={input}
+                  setInput={setInput}
+                  onSend={onSend}
+                  onKeyDown={onKeyDown}
+                  isThinking={isThinking}
+                />
+              </section>
+            }
+          />
+          <Route
+            path="/chat/:chatRoomId"
+            element={
+              <section className="flex flex-1 flex-col rounded-3xl border border-[#659EFF]/20 bg-white/90 shadow-[0_28px_80px_rgba(101,158,255,0.15)] backdrop-blur-sm transition-shadow duration-300 md:overflow-hidden md:hover:shadow-[0_32px_110px_rgba(101,158,255,0.22)]">
+                <ChatHeader title={activeConv?.title} />
+                <MessageList
+                  messages={activeConv?.messages ?? []}
+                  isThinking={isThinking}
+                  listRef={listRef}
+                />
+                <Composer
+                  input={input}
+                  setInput={setInput}
+                  onSend={onSend}
+                  onKeyDown={onKeyDown}
+                  isThinking={isThinking}
+                />
+              </section>
+            }
+          />
+        </Routes>
+      </div>
     </div>
   );
 }
 
 function MainChat({ input, setInput, onSend, onKeyDown, isThinking }) {
   return (
-    <div>
-      <Composer
-        input={input}
-        setInput={setInput}
-        onSend={onSend}
-        onKeyDown={onKeyDown}
-        isThinking={isThinking}
-      />
-    </div>
+    <Composer
+      input={input}
+      setInput={setInput}
+      onSend={onSend}
+      onKeyDown={onKeyDown}
+      isThinking={isThinking}
+    />
   );
 }
