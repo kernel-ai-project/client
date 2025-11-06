@@ -272,13 +272,16 @@ export default function ChatUI() {
   }, [activeId, activeConv, loadConversationMessages]);
 
   // 답변 스트림 요청
-  async function* askStream(question) {
-    const response = await fetch("http://localhost:8080/api/ask/stream", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question }),
-      credentials: "include",
-    });
+  async function* askStream(chatRoomId, question) {
+    const response = await fetch(
+      `http://localhost:8080/api/chatRooms/${chatRoomId}/chat`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question }),
+        credentials: "include",
+      }
+    );
     if (!response.ok || !response.body) {
       throw new Error("스트림을 열지 못했습니다.");
     }
@@ -369,9 +372,12 @@ export default function ChatUI() {
       setIsThinking(true);
       try {
         const resolvedId = (await ensureConversationPromise) ?? conversationId;
+        if (!resolvedId) {
+          throw new Error("대화방 ID를 확인할 수 없습니다.");
+        }
         conversationId = resolvedId;
 
-        for await (const chunk of askStream(trimmed)) {
+        for await (const chunk of askStream(conversationId, trimmed)) {
           appendToMessage(conversationId, thinkingMessage.id, chunk);
         }
       } catch (error) {
