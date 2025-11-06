@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { Menu } from "lucide-react";
 import Sidebar from "./Chat/components/Sidebar";
 import ChatHeader from "./Chat/components/ChatHeader";
 import MessageList from "./Chat/components/MessageList";
@@ -30,6 +31,10 @@ export default function ChatUI() {
   const [activeId, setActiveId] = useState(null);
   const [input, setInput] = useState("");
   const [isThinking, setIsThinking] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.matchMedia("(min-width: 1024px)").matches;
+  });
 
   const listRef = useRef(null);
   const sendLockRef = useRef(false);
@@ -173,6 +178,12 @@ export default function ChatUI() {
         upsertConversation(mapped);
         setActiveId(mapped.id);
         navigate(`/chat/${chatRoomId}`);
+        if (typeof window !== "undefined") {
+          const isMobile = window.matchMedia("(max-width: 1023px)").matches;
+          if (isMobile) {
+            setIsSidebarOpen(false);
+          }
+        }
       } catch (error) {
         console.error(error);
       }
@@ -403,43 +414,74 @@ export default function ChatUI() {
   }
 
   return (
-    <div className="box-border flex h-screen w-full gap-3 bg-[#FDFDFD] px-3 py-4 text-black md:gap-6 md:px-6 md:py-8">
-      <Sidebar
-        conversations={conversations}
-        activeId={activeId}
-        onSelectChat={onSelectChat}
-        onDeleteChat={onDeleteChat}
-        onEditChatName={onEditChatName}
-      />
+    <div className="relative flex h-screen w-full bg-white text-[#202124]">
+      <button
+        type="button"
+        aria-label="사이드바 토글"
+        aria-expanded={isSidebarOpen}
+        onClick={() => setIsSidebarOpen((prev) => !prev)}
+        className="absolute left-4 top-4 z-50 flex h-11 w-11 items-center justify-center rounded-full  bg-E8EAED text-[#5F6368] transition-colors duration-200 hover:bg-[white] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1A73E8]"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
 
-      <div className="flex flex-1 flex-col">
+      {isSidebarOpen ? (
+        <div
+          className="fixed inset-0 z-30 bg-black/10 backdrop-blur-sm md:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      ) : null}
+
+      <div
+        className={`relative z-40 flex-shrink-0 overflow-hidden transition-[width] duration-300 ${
+          isSidebarOpen
+            ? "w-64 md:w-72 lg:w-77 pointer-events-auto"
+            : "w-20 pointer-events-none"
+        }`}
+      >
+        <Sidebar
+          conversations={conversations}
+          activeId={activeId}
+          onSelectChat={onSelectChat}
+          onDeleteChat={onDeleteChat}
+          onEditChatName={onEditChatName}
+          onCreateNewChat={() => {
+            setActiveId(null);
+          }}
+          collapsed={!isSidebarOpen}
+        />
+      </div>
+
+      <div className="z-10 flex flex-1 flex-col">
         <Routes>
           <Route
             path="/"
             element={
-              <section className="flex flex-1 flex-col rounded-3xl border border-[#659EFF]/20 bg-white/90 shadow-[0_28px_80px_rgba(101,158,255,0.15)] backdrop-blur-sm transition-shadow duration-300 md:overflow-hidden md:hover:shadow-[0_32px_110px_rgba(101,158,255,0.22)]">
+              <section className="flex flex-1 flex-col rounded-2xl transition-shadow duration-300 md:overflow-hidden ">
                 <div
                   ref={listRef}
-                  className="flex flex-1 items-center justify-center p-6 text-center md:p-12"
+                  className="flex flex-1 items-center justify-center overflow-auto p-6 text-center md:p-12"
                 >
-                  <div className="rounded-3xl border border-[#659EFF]/25 bg-[#FDFDFD] px-8 py-12 text-lg font-medium shadow-inner shadow-[#659EFF]/20">
-                    ㅎㅇ
+                  <div className="mx-auto w-full max-w-3xl  bg-[DADCE0] px-8 py-8 text-lg font-medium text-[#202124] ">
+                    <div className="mb-6 text-2xl mask-radial-from-neutral-900 text-[#0b6cea]">
+                      안녕하세요 진용님! 무엇이 궁금하신가요?
+                    </div>
+                    <MainChat
+                      input={input}
+                      setInput={setInput}
+                      onSend={onSend}
+                      onKeyDown={onKeyDown}
+                      isThinking={isThinking}
+                    />
                   </div>
                 </div>
-                <MainChat
-                  input={input}
-                  setInput={setInput}
-                  onSend={onSend}
-                  onKeyDown={onKeyDown}
-                  isThinking={isThinking}
-                />
               </section>
             }
           />
           <Route
             path="/chat/:chatRoomId"
             element={
-              <section className="flex flex-1 flex-col rounded-3xl border border-[#659EFF]/20 bg-white/90 shadow-[0_28px_80px_rgba(101,158,255,0.15)] backdrop-blur-sm transition-shadow duration-300 md:overflow-hidden md:hover:shadow-[0_32px_110px_rgba(101,158,255,0.22)]">
+              <section className="flex flex-1 flex-col rounded-2xl  transition-shadow duration-300 md:overflow-hidden md:hover:shadow-[0_24px_60px_rgba(60,64,67,0.18)]">
                 <ChatHeader title={activeConv?.title} />
                 <MessageList
                   messages={activeConv?.messages ?? []}
