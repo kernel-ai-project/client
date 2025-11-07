@@ -378,6 +378,7 @@ export default function ChatUI() {
         conversationId = resolvedId;
 
         for await (const chunk of askStream(conversationId, trimmed)) {
+          setIsThinking(false);
           appendToMessage(conversationId, thinkingMessage.id, chunk);
         }
       } catch (error) {
@@ -464,6 +465,7 @@ export default function ChatUI() {
             path="/"
             element={
               <section className="flex flex-1 flex-col rounded-2xl transition-shadow duration-300 md:overflow-hidden ">
+                <ChatHeader />
                 <div
                   ref={listRef}
                   className="flex flex-1 items-center justify-center overflow-auto p-6 text-center md:p-12"
@@ -488,7 +490,7 @@ export default function ChatUI() {
             path="/chat/:chatRoomId"
             element={
               <section className="flex flex-1 flex-col rounded-2xl  transition-shadow duration-300 md:overflow-hidden md:hover:shadow-[0_24px_60px_rgba(60,64,67,0.18)]">
-                <ChatHeader title={activeConv?.title} />
+                <ChatHeader />
                 <MessageList
                   messages={activeConv?.messages ?? []}
                   isThinking={isThinking}
