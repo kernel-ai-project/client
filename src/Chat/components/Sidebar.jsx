@@ -23,7 +23,7 @@ export default function Sidebar({
   }
 
   return (
-    <aside className="flex h-full w-full flex-col bg-[#E8EAED] p-4 text-[#202124] ">
+    <aside className="flex h-full w-full flex-col bg-[#E8EAED] p-1 text-[#202124] ">
       <div className="flex justify-end">
         <div className="rounded-2xl  p-3  hover:bg-[#FDFDFD] duration-200 ">
           <button
@@ -42,7 +42,7 @@ export default function Sidebar({
         {conversations.map((conversation) => {
           const isActive = conversation.id === activeId;
           const baseClasses =
-            "group relative flex w-full items-center gap-3 rounded-2xl border border-transparent px-3 py-3 text-left transition-colors duration-200";
+            "group relative flex w-full items-center gap-3 rounded-2xl border border-transparent px-6 py-3 text-left transition-colors duration-200";
           const hoverClasses = isActive ? "" : "hover:bg-[#FDFDFD]";
           const activeClasses = isActive ? "bg-[#D2E3FC] shadow-none" : "";
 

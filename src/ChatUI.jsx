@@ -272,13 +272,16 @@ export default function ChatUI() {
   }, [activeId, activeConv, loadConversationMessages]);
 
   // 답변 스트림 요청
-  async function* askStream(question) {
-    const response = await fetch("http://localhost:8080/api/ask/stream", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question }),
-      credentials: "include",
-    });
+  async function* askStream(chatRoomId, question) {
+    const response = await fetch(
+      `http://localhost:8080/api/chatRooms/${chatRoomId}/chat`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question }),
+        credentials: "include",
+      }
+    );
     if (!response.ok || !response.body) {
       throw new Error("스트림을 열지 못했습니다.");
     }
@@ -369,9 +372,13 @@ export default function ChatUI() {
       setIsThinking(true);
       try {
         const resolvedId = (await ensureConversationPromise) ?? conversationId;
+        if (!resolvedId) {
+          throw new Error("대화방 ID를 확인할 수 없습니다.");
+        }
         conversationId = resolvedId;
 
-        for await (const chunk of askStream(trimmed)) {
+        for await (const chunk of askStream(conversationId, trimmed)) {
+          setIsThinking(false);
           appendToMessage(conversationId, thinkingMessage.id, chunk);
         }
       } catch (error) {
@@ -458,6 +465,7 @@ export default function ChatUI() {
             path="/"
             element={
               <section className="flex flex-1 flex-col rounded-2xl transition-shadow duration-300 md:overflow-hidden ">
+                <ChatHeader />
                 <div
                   ref={listRef}
                   className="flex flex-1 items-center justify-center overflow-auto p-6 text-center md:p-12"
@@ -482,7 +490,7 @@ export default function ChatUI() {
             path="/chat/:chatRoomId"
             element={
               <section className="flex flex-1 flex-col rounded-2xl  transition-shadow duration-300 md:overflow-hidden md:hover:shadow-[0_24px_60px_rgba(60,64,67,0.18)]">
-                <ChatHeader title={activeConv?.title} />
+                <ChatHeader />
                 <MessageList
                   messages={activeConv?.messages ?? []}
                   isThinking={isThinking}
