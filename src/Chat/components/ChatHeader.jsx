@@ -1,18 +1,40 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 export default function ChatHeader() {
   const [isLogin, setIsLogin] = useState(false);
   let navigate = useNavigate();
 
-  const handleAuth = () => {
+  const checkLoginStatus = useCallback(async () => {
+    try {
+      // chatRooms 엔드포인트는 로그인된 세션에만 200을 반환하므로 상태 확인 용도로 재사용
+      const res = await fetch("http://localhost:8080/api/chatRooms", {
+        credentials: "include",
+      });
+      setIsLogin(res.ok);
+    } catch (error) {
+      setIsLogin(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkLoginStatus();
+  }, [checkLoginStatus]);
+
+  const handleAuth = async () => {
     if (isLogin) {
-      // 로그아웃 처리 로직
-      setIsLogin(true);
+      try {
+        await fetch("http://localhost:8080/logout", {
+          method: "POST",
+          credentials: "include",
+        });
+        setIsLogin(false);
+        navigate("/");
+      } catch (error) {
+        console.error("로그아웃 실패", error);
+      }
     } else {
-      // 네이버 소셜 로그인 페이지로 이동
       window.location.href = "http://localhost:8080/oauth2/authorization/naver";
-      setIsLogin(true);
     }
   };
   return (
