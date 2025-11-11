@@ -1,232 +1,128 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Menu } from "lucide-react";
 import Sidebar from "./Chat/components/Sidebar";
 import ChatHeader from "./Chat/components/ChatHeader";
 import MessageList from "./Chat/components/MessageList";
 import Composer from "./Chat/components/Composer";
 import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
+import { useChatRooms } from "./Chat/hooks/useChatRooms";
+import { useMessages } from "./Chat/hooks/useMessages";
+import { useSendMessage } from "./Chat/hooks/useSendMessage";
 import "./ChatUI.css";
 
-// --- Types ---------------------------------------------------------------
-const ROLES = { user: "user", assistant: "assistant", system: "system" };
-
-// 메시지 객체 생성
-function createMessage(role, content) {
-  return { id: crypto.randomUUID(), role, content, createdAt: Date.now() };
-}
-
-// 채팅방 리스트 응답을 내부 포맷으로 정규화
-function normalizeChatRooms(apiRooms = []) {
-  return apiRooms.map((room) => ({
-    id: String(room.chatRoomId),
-    title: room.title ?? "새 대화",
-    createdAt: Date.now(),
-    isFavorited: Boolean(room.isFavorited),
-    messages: [],
-  }));
-}
-
 export default function ChatUI() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // 채팅방 목록 저장
   const [conversations, setConversations] = useState([]);
+
+  // 현재 활성화된 채팅
   const [activeId, setActiveId] = useState(null);
+
+  // 입력창의 텍스트
   const [input, setInput] = useState("");
+
+  // AI가 응답 중인지 여부
   const [isThinking, setIsThinking] = useState(false);
+
+  // 사이드바 열림/닫힘 상태 (화면 크기에 따라 초기값 다름)
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     if (typeof window === "undefined") return true;
     return window.matchMedia("(min-width: 1024px)").matches;
   });
 
+  // 메세지 목록의 DOM 참조 (스크롤 제어용)
   const listRef = useRef(null);
+
+  // 메세지 전송 중복 방지 플래그
   const sendLockRef = useRef(false);
+
+  // 현재 activeId를 항상 최신 값으로 참조 (비동기 작업용)
   const activeIdRef = useRef(null);
 
-  const navigate = useNavigate();
-  const location = useLocation();
-
+  // URL에서 채팅방 ID 추출 (URL 변경 시에만 재계산)
   const routeActiveId = useMemo(() => {
     const match = location.pathname.match(/^\/chat\/([^/]+)/);
     return match ? match[1] : null;
   }, [location.pathname]);
 
-  // 현재 선택된 채팅방 계산
+  // 현재 활성화된 채팅방 객체 (conversations나 activeId 변경 시에만 재계산)
   const activeConv = useMemo(
     () => conversations.find((conv) => conv.id === activeId),
     [conversations, activeId]
   );
 
-  // 초기 채팅방 목록 로드
-  const loadChatRooms = useCallback(async () => {
-    try {
-      const res = await fetch("http://localhost:8080/api/chatRooms", {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("채팅방 목록 로딩 실패");
-      const rooms = await res.json();
-      const normalized = normalizeChatRooms(rooms);
-      const normalizedMap = new Map(normalized.map((conv) => [conv.id, conv]));
-
-      let resolvedActiveId = null;
-      setConversations((prev) => {
-        const prevMap = new Map(prev.map((conv) => [conv.id, conv]));
-        const merged = normalized.map((conv) => {
-          const existing = prevMap.get(conv.id);
-          if (!existing) return conv;
-          return {
-            ...conv,
-            messages: existing.messages,
-            isTemp: existing.isTemp ?? false,
-          };
-        });
-
-        const extras = prev.filter((conv) => !normalizedMap.has(conv.id));
-        const nextList = [...merged, ...extras];
-
-        resolvedActiveId =
-          nextList.find((conv) => conv.id === routeActiveId)?.id ??
-          (nextList.some((conv) => conv.id === activeIdRef.current)
-            ? activeIdRef.current
-            : null) ??
-          nextList[0]?.id ??
-          null;
-
-        return nextList;
-      });
-
-      setActiveId((current) =>
-        resolvedActiveId !== null ? resolvedActiveId : current
-      );
-    } catch (error) {
-      console.log(error);
-      setConversations((prev) => {
-        if (prev.length) return prev;
-        return normalizeChatRooms([]);
-      });
-      setActiveId((prevId) => prevId ?? null);
-    }
-  }, [routeActiveId]);
-
+  // URL과 activeId 동기화
   useEffect(() => {
     if (routeActiveId && routeActiveId !== activeId) {
-      setActiveId(routeActiveId);
+      setActiveId(routeActiveId); // URL 변경 시 activeId 업데이트
     }
   }, [routeActiveId, activeId]);
 
-  // 채팅방 메시지 로드
-  const loadConversationMessages = useCallback(async (chatRoomId) => {
-    const res = await fetch(
-      `http://localhost:8080/api/chatRooms/${chatRoomId}/messages`,
-      { credentials: "include" }
-    );
-    if (!res.ok) throw new Error("채팅방 불러오기 실패");
-    const data = await res.json();
-    return {
-      id: String(data.chatRoomId),
-      title: data.title ?? "새 대화",
-      createdAt: Date.now(),
-      messages: mapMessages(data.messages),
-    };
-  }, []);
+  // activeIdRef 최신 값 유지
+  useEffect(() => {
+    activeIdRef.current = activeId; // activeId 변경 시 ref도 업데이트
+  }, [activeId]);
 
-  // 채팅방 생성 또는 교체
-  const upsertConversation = useCallback((next) => {
-    setConversations((prev) => {
-      const exists = prev.some((conv) => conv.id === next.id);
-      return exists
-        ? prev.map((conv) => (conv.id === next.id ? next : conv))
-        : [...prev, next];
-    });
-  }, []);
+  // 마지막으로 로드한 채팅방 ID (중복 로딩 방지)
+  const lastLoadedConversationRef = useRef(null);
 
-  // 메시지 추가
-  const pushMessage = useCallback((conversationId, role, content) => {
-    const message = createMessage(role, content);
-    setConversations((prev) =>
-      prev.map((conversation) =>
-        conversation.id === conversationId
-          ? {
-              ...conversation,
-              messages: [...conversation.messages, message],
-            }
-          : conversation
-      )
-    );
-    return message;
-  }, []);
+  // 메세지 추가 / 수정 함수
+  const { pushMessage, appendToMessage } = useMessages({ setConversations });
 
-  // 스트리밍 청크 병합
-  const appendToMessage = useCallback((conversationId, messageId, chunk) => {
-    setConversations((prev) =>
-      prev.map((conversation) => {
-        if (conversation.id !== conversationId) return conversation;
-        return {
-          ...conversation,
-          messages: conversation.messages.map((message) =>
-            message.id === messageId
-              ? { ...message, content: message.content + chunk }
-              : message
-          ),
-        };
-      })
-    );
-  }, []);
-
-  // 채팅방 선택
-  const onSelectChat = useCallback(
-    async (chatRoomId) => {
-      try {
-        const mapped = await loadConversationMessages(chatRoomId);
-        upsertConversation(mapped);
-        setActiveId(mapped.id);
-        navigate(`/chat/${chatRoomId}`);
-        if (typeof window !== "undefined") {
-          const isMobile = window.matchMedia("(max-width: 1023px)").matches;
-          if (isMobile) {
-            setIsSidebarOpen(false);
-          }
-        }
-      } catch (error) {
-        console.error(error);
-      }
-    },
-    [loadConversationMessages, navigate, upsertConversation]
-  );
-
-  const onEditChatName = useCallback(() => {
-    // 수정 로직 작성하기
+  // 채팅방 관련 기능
+  const {
+    loadChatRooms, // 채팅방 목록 불러오기
+    loadConversationMessages, // 특정 채팅방 메세지 불러오기
+    upsertConversation, // 채팅방 생성/업데이트
+    onSelectChat, // 채팅방 선택
+    onEditChatName, // 채팅방 이름 수정
+    onDeleteChat, // 채팅방 삭제
+  } = useChatRooms({
+    setConversations,
+    setActiveId,
+    routeActiveId,
+    activeIdRef,
+    navigate,
+    setIsSidebarOpen,
   });
 
-  // 채팅방 삭제
-  const onDeleteChat = useCallback((id) => {
-    setConversations((prev) => {
-      const remaining = prev.filter((conv) => conv.id !== id);
-      const nextList = remaining.length
-        ? remaining
-        : [createConversation("새 대화")];
-      setActiveId(nextList[0].id);
-      return nextList;
-    });
-  }, []);
+  // 메세지 전송 로직
+  const { onSend } = useSendMessage({
+    input,
+    setInput,
+    isThinking,
+    setIsThinking,
+    sendLockRef,
+    activeConv,
+    location,
+    navigate,
+    setConversations,
+    setActiveId,
+    upsertConversation,
+    pushMessage,
+    appendToMessage,
+  });
 
   // 초기 렌더 시 채팅방 목록 불러오기
   useEffect(() => {
-    loadChatRooms();
+    loadChatRooms(); // 컴포넌트 마운트 시 한 번 실행
   }, [loadChatRooms]);
 
-  // 메시지 추가 시 스크롤 유지
+  // 메시지 추가 시 자동 스크롤
   useEffect(() => {
     if (!listRef.current) return;
+    // 메세지 추가되거나 AI 응답 중일 대 맨 아래로 스크롤
     listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [activeConv?.messages.length, isThinking]);
 
+  // 채팅방 메세지 로딩
   useEffect(() => {
-    activeIdRef.current = activeId;
-  }, [activeId]);
-
-  const lastLoadedConversationRef = useRef(null);
-
-  useEffect(() => {
+    // 조건: activeId가 있고, 임시 채팅방이 아니어야 함.
     if (!activeId || !activeConv || activeConv.isTemp) return;
 
+    // 이미 메세지가 있고, 이미 로드한 채팅방이면 스킵
     if (
       activeConv.messages.length > 0 &&
       lastLoadedConversationRef.current === activeId
@@ -234,190 +130,56 @@ export default function ChatUI() {
       return;
     }
 
-    let cancelled = false;
+    let cancelled = false; // cleanup을 위한 플래그
     lastLoadedConversationRef.current = activeId;
 
     (async () => {
       try {
+        // 서버에서 메세지 불러오기
         const fresh = await loadConversationMessages(activeId);
-        if (cancelled) return;
+        if (cancelled) return; // 컴포넌트 언마운트되면 무시
+
+        // conversations 상태 업데이트
         setConversations((prev) => {
+          // 새 채팅방이면 추가
           const exists = prev.some((conv) => conv.id === fresh.id);
           if (!exists) return [...prev, { ...fresh, isTemp: false }];
+
+          // 기존 채팅방이면 병합 (로컬 메세지 유지)
           return prev.map((conv) => {
             if (conv.id !== fresh.id) return conv;
             const mergedMessages =
               conv.messages.length >= fresh.messages.length
-                ? conv.messages
-                : fresh.messages;
+                ? conv.messages // 로컬 메세지가 더 많으면 로컬 것 사용
+                : fresh.messages; // 서버 메세지가 더 많으면 서버 것 사용
             return {
-              ...conv,
-              ...fresh,
-              messages: mergedMessages,
-              isTemp: false,
+              ...conv, // 기존 데이터 복사
+              ...fresh, // 서버 데이터로 덮어쓰기
+              messages: mergedMessages, // 메세지는 더 많은 걸로
+              isTemp: false, // 임시가 아니라고 표시
             };
           });
         });
       } catch (error) {
         console.error(error);
+        // 실패 시 다시 로드 가능하도록 초기화
         if (lastLoadedConversationRef.current === activeId) {
           lastLoadedConversationRef.current = null;
         }
       }
     })();
 
+    // cleanup: 컴포넌트 언마운트 시 비동기 작업 취소
     return () => {
       cancelled = true;
     };
   }, [activeId, activeConv, loadConversationMessages]);
-
-  // 답변 스트림 요청
-  async function* askStream(chatRoomId, question) {
-    const response = await fetch(
-      `http://localhost:8080/api/chatRooms/${chatRoomId}/chat`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
-        credentials: "include",
-      }
-    );
-    if (!response.ok || !response.body) {
-      throw new Error("스트림을 열지 못했습니다.");
-    }
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      yield decoder.decode(value, { stream: true });
-    }
-  }
-
-  // 메시지 전송
-  async function onSend() {
-    const trimmed = input.trim();
-    if (!trimmed || isThinking || sendLockRef.current) return;
-
-    sendLockRef.current = true;
-    try {
-      let conversationId = activeConv?.id;
-      let shouldRename = false;
-
-      let ensureConversationPromise = Promise.resolve(conversationId ?? null);
-
-      if (location.pathname === "/" || !conversationId) {
-        const tempId = crypto.randomUUID();
-        const tempConversation = createConversation(
-          trimmed.slice(0, 20) || "새 대화",
-          {
-            id: tempId,
-            isTemp: true,
-          }
-        );
-        upsertConversation(tempConversation);
-        setActiveId(tempId);
-        navigate(`/chat/${tempId}`);
-        conversationId = tempId;
-
-        ensureConversationPromise = (async () => {
-          const res = await fetch("http://localhost:8080/api/chatRooms", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ question: trimmed }),
-            credentials: "include",
-          });
-          if (!res.ok) throw new Error("채팅방 생성 실패");
-
-          const data = await res.json();
-          const realId = String(data.chatRoomId);
-
-          setConversations((prev) =>
-            prev.map((conv) =>
-              conv.id === tempId
-                ? {
-                    ...conv,
-                    id: realId,
-                    title: data.query ?? conv.title,
-                    isTemp: false,
-                  }
-                : conv
-            )
-          );
-          setActiveId(realId);
-          navigate(`/chat/${realId}`);
-          return realId;
-        })();
-      } else if (
-        activeConv?.title === "새 대화" ||
-        activeConv?.title === "New chat"
-      ) {
-        shouldRename = true;
-      }
-
-      setInput("");
-      pushMessage(conversationId, ROLES.user, trimmed);
-
-      const thinkingMessage = pushMessage(conversationId, ROLES.assistant, "");
-
-      if (shouldRename) {
-        const title = trimmed.slice(0, 20) || "새 대화";
-        setConversations((prev) =>
-          prev.map((conv) =>
-            conv.id === conversationId ? { ...conv, title } : conv
-          )
-        );
-      }
-
-      setIsThinking(true);
-      try {
-        const resolvedId = (await ensureConversationPromise) ?? conversationId;
-        if (!resolvedId) {
-          throw new Error("대화방 ID를 확인할 수 없습니다.");
-        }
-        conversationId = resolvedId;
-
-        for await (const chunk of askStream(conversationId, trimmed)) {
-          setIsThinking(false);
-          appendToMessage(conversationId, thinkingMessage.id, chunk);
-        }
-      } catch (error) {
-        appendToMessage(
-          conversationId,
-          thinkingMessage.id,
-          "\n(에러) 답변을 불러오지 못했습니다."
-        );
-        console.error(error);
-      } finally {
-        setIsThinking(false);
-      }
-    } finally {
-      sendLockRef.current = false;
-    }
-  }
-
-  function createConversation(
-    title = "새 대화",
-    { id = crypto.randomUUID(), messages = [], isTemp = false } = {}
-  ) {
-    return { id, title, createdAt: Date.now(), messages, isTemp };
-  }
 
   function onKeyDown(e) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       onSend();
     }
-  }
-
-  function mapMessages(apiMessages = []) {
-    return apiMessages.map((m) => ({
-      id: String(m.messageId),
-      role: m.isUser ? ROLES.user : ROLES.assistant,
-      content: m.message ?? "",
-      createdAt: new Date(m.created_time).getTime(),
-      userId: m.userId ?? null,
-    }));
   }
 
   return (
