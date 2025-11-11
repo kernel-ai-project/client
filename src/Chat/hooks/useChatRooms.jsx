@@ -13,6 +13,77 @@ export function useChatRooms({
   navigate,
   setIsSidebarOpen,
 }) {
+  // 채팅방 메시지 로드
+  const loadConversationMessages = useCallback(async (chatRoomId) => {
+    // 서버에서 메세지 가져오기
+    const res = await fetch(
+      `http://localhost:8080/api/chatRooms/${chatRoomId}/messages`,
+      { credentials: "include" }
+    );
+
+    if (!res.ok) throw new Error("채팅방 불러오기 실패");
+
+    const data = await res.json();
+    // 일관된 형식으로 변환
+    return {
+      id: String(data.chatRoomId),
+      title: data.title ?? "새 대화",
+      createdAt: Date.now(),
+      messages: mapMessages(data.messages), // 메세지 변환
+    };
+  }, []);
+
+  // 채팅방 생성 또는 교체
+  const upsertConversation = useCallback(
+    (next) => {
+      setConversations((prev) => {
+        // 이미 있는 채팅방인지 확인
+        const exists = prev.some((conv) => conv.id === next.id);
+
+        return exists
+          ? prev.map((conv) => (conv.id === next.id ? next : conv)) // 교체
+          : [...prev, next]; // 추가
+      });
+    },
+    [setConversations]
+  );
+
+  // 채팅방 선택
+  const onSelectChat = useCallback(
+    async (chatRoomId) => {
+      try {
+        // 서버에서 메세지 불러오기
+        const mapped = await loadConversationMessages(chatRoomId);
+
+        // conversations 배열에 추가/업데이트
+        upsertConversation(mapped);
+
+        // 활성화
+        setActiveId(mapped.id);
+
+        // URL 변경
+        navigate(`/chat/${chatRoomId}`);
+
+        // 모바일이면 사이드바 닫기
+        if (typeof window !== "undefined") {
+          const isMobile = window.matchMedia("(max-width: 1023px)").matches;
+          if (isMobile) {
+            setIsSidebarOpen(false);
+          }
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    },
+    [
+      loadConversationMessages,
+      navigate,
+      upsertConversation,
+      setActiveId,
+      setIsSidebarOpen,
+    ]
+  );
+
   // 초기 채팅방 목록 로드
   const loadChatRooms = useCallback(async () => {
     try {
@@ -79,77 +150,6 @@ export function useChatRooms({
       setActiveId((prevId) => prevId ?? null);
     }
   }, [routeActiveId, activeIdRef, setConversations, setActiveId]);
-
-  // 채팅방 선택
-  const onSelectChat = useCallback(
-    async (chatRoomId) => {
-      try {
-        // 서버에서 메세지 불러오기
-        const mapped = await loadConversationMessages(chatRoomId);
-
-        // conversations 배열에 추가/업데이트
-        upsertConversation(mapped);
-
-        // 활성화
-        setActiveId(mapped.id);
-
-        // URL 변경
-        navigate(`/chat/${chatRoomId}`);
-
-        // 모바일이면 사이드바 닫기
-        if (typeof window !== "undefined") {
-          const isMobile = window.matchMedia("(max-width: 1023px)").matches;
-          if (isMobile) {
-            setIsSidebarOpen(false);
-          }
-        }
-      } catch (error) {
-        console.error(error);
-      }
-    },
-    [
-      loadConversationMessages,
-      navigate,
-      upsertConversation,
-      setActiveId,
-      setIsSidebarOpen,
-    ]
-  );
-
-  // 채팅방 메시지 로드
-  const loadConversationMessages = useCallback(async (chatRoomId) => {
-    // 서버에서 메세지 가져오기
-    const res = await fetch(
-      `http://localhost:8080/api/chatRooms/${chatRoomId}/messages`,
-      { credentials: "include" }
-    );
-
-    if (!res.ok) throw new Error("채팅방 불러오기 실패");
-
-    const data = await res.json();
-    // 일관된 형식으로 변환
-    return {
-      id: String(data.chatRoomId),
-      title: data.title ?? "새 대화",
-      createdAt: Date.now(),
-      messages: mapMessages(data.messages), // 메세지 변환
-    };
-  }, []);
-
-  // 채팅방 생성 또는 교체
-  const upsertConversation = useCallback(
-    (next) => {
-      setConversations((prev) => {
-        // 이미 있는 채팅방인지 확인
-        const exists = prev.some((conv) => conv.id === next.id);
-
-        return exists
-          ? prev.map((conv) => (conv.id === next.id ? next : conv)) // 교체
-          : [...prev, next]; // 추가
-      });
-    },
-    [setConversations]
-  );
 
   const onEditChatName = useCallback(() => {
     // 수정 로직 작성하기
