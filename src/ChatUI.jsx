@@ -32,6 +32,8 @@ export default function ChatUI() {
     return window.matchMedia("(min-width: 1024px)").matches;
   });
 
+  const [greeting, setGreeting] = useState("로딩 중...");
+
   // 메세지 목록의 DOM 참조 (스크롤 제어용)
   const listRef = useRef(null);
 
@@ -182,6 +184,31 @@ export default function ChatUI() {
     }
   }
 
+  async function fetchGreeting() {
+    try {
+      const response = await fetch("http://localhost:8080/api/greetings", {
+        credentials: "include",
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP 에러! 상태: ${response.status}`);
+      }
+      const data = await response.json();
+      return data.result.data.greeting;
+    } catch (error) {
+      console.error("에러", error);
+      return "안녕하세요!";
+    }
+  }
+
+  useEffect(() => {
+    async function loadGreeting() {
+      const data = await fetchGreeting();
+      setGreeting(data);
+    }
+
+    loadGreeting();
+  }, []);
+
   return (
     <div className="relative flex h-screen w-full bg-white text-[#202124]">
       <button
@@ -234,7 +261,7 @@ export default function ChatUI() {
                 >
                   <div className="mx-auto w-full max-w-3xl  bg-[DADCE0] px-8 py-8 text-lg font-medium text-[#202124] ">
                     <div className="mb-6 text-2xl mask-radial-from-neutral-900 text-[#0b6cea]">
-                      안녕하세요 진용님! 무엇이 궁금하신가요?
+                      {greeting}
                     </div>
                     <MainChat
                       input={input}
