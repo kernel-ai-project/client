@@ -130,16 +130,16 @@ export function useChatRooms({
           (nextList.some((conv) => conv.id === activeIdRef.current)
             ? activeIdRef.current // 현재 활성화된 ID
             : null) ??
-          nextList[0]?.id ?? // 첫 번째 채팅방
           null;
 
         return nextList;
       });
 
-      // activeId 업데이트
-      setActiveId((current) =>
-        resolvedActiveId !== null ? resolvedActiveId : current
-      );
+      // ✅ URL에 채팅방 ID가 있을 때만 activeId 설정
+      if (routeActiveId) {
+        setActiveId(routeActiveId);
+      }
+      // routeActiveId가 null이면 activeId를 건드리지 않음 (null 유지)
     } catch (error) {
       console.log(error);
       // 에러 발생 시 기존 데이터 유지
@@ -151,9 +151,45 @@ export function useChatRooms({
     }
   }, [routeActiveId, activeIdRef, setConversations, setActiveId]);
 
-  const onEditChatName = useCallback(() => {
-    // 수정 로직 작성하기
-  });
+  const onEditChatName = useCallback(
+    async function updateChatRoomTitle(chatRoomId, newTitle) {
+      // 수정 로직 작성하기
+      try {
+        // 먼저 로컬 상태 즉시 업데이트(UI 바로 반영)
+        setConversations((prev) =>
+          prev.map((conv) =>
+            conv.id === chatRoomId ? { ...conv, title: newTitle } : conv
+          )
+        );
+
+        const response = await fetch(
+          `http://localhost:8080/api/chatRooms/${chatRoomId}/title`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            credentials: "include",
+            body: JSON.stringify({
+              title: newTitle,
+            }),
+          }
+        );
+        // console.log(fetchData.result.data.title);
+
+        if (!response.ok) {
+          throw new Error("채팅방 이름 수정 실패");
+        }
+
+        const fetchJson = await response.json();
+        return fetchJson.result.data.title;
+      } catch (error) {
+        console.error("에러", error);
+        throw error;
+      }
+    },
+    [setConversations]
+  );
 
   // 채팅방 삭제
   const onDeleteChat = useCallback(

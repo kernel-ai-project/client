@@ -58,7 +58,9 @@ export default function ChatUI() {
   // URL과 activeId 동기화
   useEffect(() => {
     if (routeActiveId && routeActiveId !== activeId) {
-      setActiveId(routeActiveId); // URL 변경 시 activeId 업데이트
+      setActiveId(routeActiveId); // URL에 채팅방 ID가 있으면 설정
+    } else if (!routeActiveId && activeId !== null) {
+      setActiveId(null);
     }
   }, [routeActiveId, activeId]);
 
